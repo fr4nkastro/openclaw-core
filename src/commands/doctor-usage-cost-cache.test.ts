@@ -251,7 +251,10 @@ describe("legacy usage-cost cache cleanup", () => {
     if (operation === "readdir") {
       vi.spyOn(fs, "readdir").mockRejectedValueOnce(error);
     } else {
-      vi.spyOn(fs, "stat").mockRejectedValueOnce(error);
+      const stat = fs.stat.bind(fs);
+      vi.spyOn(fs, "stat").mockImplementation((...args) =>
+        String(args[0]) === tempFile ? Promise.reject(error) : stat(...args),
+      );
     }
     await maybeRepairLegacyRuntimeFiles(shouldRepair, { OPENCLAW_STATE_DIR: root });
     if (diagnostic) {
