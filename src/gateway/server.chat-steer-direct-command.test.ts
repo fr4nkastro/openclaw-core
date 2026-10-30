@@ -92,7 +92,7 @@ it.for([
   { source: "browser", disposition: "steered" },
   { source: "system", disposition: "followup" },
 ] as const)(
-  "routes browser corrections to a $source direct command as $disposition",
+  "routes browser corrections to a $source direct command as $disposition with collaborative steering disabled",
   async ({ source, disposition: expectedDisposition }, { signal }) => {
     const sessionKey = `agent:main:direct-steering-${source}`;
     const sessionId = `direct-steering-session-${source}`;
@@ -120,6 +120,10 @@ it.for([
     const config = getRuntimeConfig();
     await writeConfigFile({
       ...config,
+      messages: {
+        ...config.messages,
+        queue: { ...config.messages?.queue, allowCollaborativeSteering: false },
+      },
       plugins: { ...config.plugins, enabled: false },
       models: {
         providers: {
