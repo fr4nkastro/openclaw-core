@@ -90,7 +90,7 @@ installGatewayTestHooks({
 
 it.for([
   { source: "browser", disposition: "steered" },
-  { source: "system", disposition: "followup" },
+  { source: "system", disposition: "steered" },
 ] as const)(
   "routes browser corrections to a $source direct command as $disposition",
   async ({ source, disposition: expectedDisposition }, { signal }) => {
@@ -329,9 +329,8 @@ it.for([
       );
       const registration = getEmbeddedRunAttachment(handle);
       expect(registration?.toolAuthority?.source).toBe("reply");
-      expect(readAdmittedRunOperatorAuthority(attempt.admittedRunContext) !== undefined).toBe(
-        source === "browser",
-      );
+      const admittedAuthority = readAdmittedRunOperatorAuthority(attempt.admittedRunContext);
+      expect(admittedAuthority !== undefined).toBe(source === "browser");
       expect(registration?.operationalRunInstance).toBe(
         attempt.admittedRunContext.operationalRunInstance,
       );
@@ -351,9 +350,8 @@ it.for([
         )?.value,
       ).toMatchObject({ runId, sourceTurnId: runId });
       expect(await withinTest(disposition.promise, signal)).toBe(expectedDisposition);
-      if (expectedDisposition === "steered") {
-        expect(dispatchInboundMessageMock).not.toHaveBeenCalled();
-      }
+      expect(readAdmittedRunOperatorAuthority(attempt.admittedRunContext)).toBe(admittedAuthority);
+      expect(dispatchInboundMessageMock).not.toHaveBeenCalled();
     } finally {
       // The fixture prevents completion until release; only then does its response budget begin.
       const settled =
