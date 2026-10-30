@@ -54,6 +54,7 @@ export function isWorkerGoalChatAdmission(
     placement?.executionMode === "remote-exec" &&
     placement.state !== "local" &&
     isDirectChatGoalSession({
+      allowGlobal: true,
       entry: current.entry,
       allowAborted: request.goalOperation?.action === "resume",
       acpMeta,
@@ -74,6 +75,8 @@ export function isWorkerGoalChatAdmission(
 
 export function isDirectChatGoalSession(params: {
   allowAborted?: boolean;
+  /** Captured chat admission retains eligibility for an exact global selection. */
+  allowGlobal?: boolean;
   entry?: SessionEntry;
   acpMeta: SessionEntry["acp"] | null;
   requestedSessionId?: string;
@@ -82,7 +85,7 @@ export function isDirectChatGoalSession(params: {
   const entry = params.entry;
   return Boolean(
     entry?.sessionId &&
-    params.sessionKey !== "global" &&
+    (params.sessionKey !== "global" || params.allowGlobal === true) &&
     (entry.abortedLastRun !== true || params.allowAborted === true) &&
     entry.archivedAt === undefined &&
     entry.initializationPending !== true &&
@@ -124,6 +127,7 @@ export function isLocalChatInputAdmission(
     (placement && placement.state !== "local") ||
     !entry ||
     !isDirectChatGoalSession({
+      allowGlobal: true,
       entry,
       acpMeta,
       sessionKey: current.canonicalKey,
