@@ -305,18 +305,7 @@ it.each(["unchanged", "revoked", "replaced"] as const)(
     const renaming = track(f.service.reconcile(sessionKey));
     await entered.promise;
     if (change === "revoked") {
-      const revocations = createPluginStateSyncKeyedStoreForTests("clickclack", {
-        namespace: "discussion-revoked-channels",
-        maxEntries: 100_000,
-        overflowPolicy: "reject-new",
-        env: f.env,
-      });
-      revocations.register(`${binding.serverBaseUrl}\0${binding.channelId}`, {
-        accountId: binding.accountId,
-        serverBaseUrl: binding.serverBaseUrl,
-        channelId: binding.channelId,
-        revokedAt: Date.now(),
-      });
+      await markClickClackDiscussionChannelIdentityRevoked({ runtime: f.runtime, ...binding });
     } else if (change === "replaced") {
       nativeBindings(f.env).register(sessionKey, { ...binding, channelId: "chn_replacement" });
     }
