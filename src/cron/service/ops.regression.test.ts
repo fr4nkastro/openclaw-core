@@ -393,6 +393,7 @@ it("keeps a queued quiet schedule event separate from its one terminal event", a
       "scheduled",
     ]);
     const finished = terminal.events.filter((event) => event.action === "finished");
+    expect(finished[0]?.triggerFired).toBe(false);
     expectSingleEvent(finished, {
       jobId: job.id,
       runId,
@@ -465,9 +466,12 @@ it.each(["removed", "disabled"] as const)(
         }).entries,
         expected,
       );
-      expect(latestRunReceipt(state.deps.storePath, job.id)).toEqual({
-        status: "error",
-        error: reason,
+      // Terminal history can precede the separate execution-receipt write.
+      await vi.waitFor(() => {
+        expect(latestRunReceipt(state.deps.storePath, job.id)).toEqual({
+          status: "error",
+          error: reason,
+        });
       });
       const storedJob = state.store?.jobs.find((entry) => entry.id === job.id);
       if (mutation === "removed") {

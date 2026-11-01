@@ -31,6 +31,9 @@ function bundledPluginFile(pluginId: string, relativePath: string, suffix = ""):
 // Package scripts, workflows, Docker scenarios, and documented maintainer commands invoke these
 // files by path. They are executable roots rather than importable library modules.
 const repositoryScriptEntries = [
+  // Offline composition is documented; Docker executes the staged finalizer by path.
+  "scripts/compose-installed-runtime.mts!",
+  "scripts/finalize-installed-runtime.mjs!",
   // Performance drivers and their preloads are invoked directly from documented commands.
   "scripts/perf/**/*.{js,mjs,cjs,ts,mts,cts}!",
   // Spawned directly by native-allocation-profile.test.ts.
@@ -38,13 +41,18 @@ const repositoryScriptEntries = [
   // Their source headers document standalone benchmark and measurement commands.
   "scripts/bench-android-release-history.mts!",
   "scripts/bench-duplicate-paragraphs.mts!",
+  "scripts/bench-plugin-catalog.ts!",
   "scripts/perf/agent-exec-cgroup-proof.ts!",
   "scripts/perf/agent-startup-inspection.ts!",
   "scripts/perf/anthropic-request-construction.ts!",
   "scripts/perf/auth-file-watch-events-measure.ts!",
+  "scripts/perf/native-pr-bootstrap-measure.mjs!",
   "scripts/perf/backup-verify-fixture.mjs!",
   "scripts/perf/backup-verify-measure.mjs!",
   "scripts/perf/board-read-admission-measure.ts!",
+  "scripts/perf/cron-own-receipts-measure.mjs!",
+  "scripts/perf/spawn-broker-shutdown-measure.ts!",
+  "scripts/perf/workspace-inventory-spawn-measure.ts!",
   // catalog-compare-released.mts copies and spawns this sandboxed reader by path.
   "scripts/lib/catalog-compare-released-worker.mts!",
   // The prepublish registry executes this shared build-and-pack lifetime by path.
@@ -125,6 +133,8 @@ const repositoryScriptEntries = [
   "scripts/bench-plugin-registration.mts!",
   // The cold-load benchmark guide invokes this opt-in CLI by path.
   "scripts/bench-control-ui-cold-load.ts!",
+  // The history-depth benchmark guide invokes this opt-in CLI by path.
+  "scripts/bench-control-ui-history-depth.ts!",
   // scripts/control-ui-retention/README.md invokes this opt-in production census.
   "scripts/control-ui-retention/retention-suite.ts!",
   // #179175 invokes this development-loop benchmark CLI by path.
@@ -135,9 +145,14 @@ const repositoryScriptEntries = [
   "scripts/bench-control-ui-document.ts!",
   // The channel-turn benchmark guide invokes this opt-in CLI by path.
   "scripts/bench-channel-turn.mts!",
+  // Opt-in append benchmark CLI documented in its source header.
+  "scripts/perf/transcript-append-normalization-measure.ts!",
   "scripts/perf/session-actor-retention-seed.ts!",
   "scripts/perf/session-cold-selection.ts!",
+  "scripts/perf/session-delete-diagnostics-measure.ts!",
+  "scripts/perf/slow-wait-holder-measure.ts!",
   "scripts/perf/session-entry-projection-measure.ts!",
+  "scripts/perf/session-lifecycle-delete-sql-measure.ts!",
   // docs/reference/test/performance.md invokes the Decision transport comparison driver.
   "scripts/bench-decision-transport.mts!",
   // docs/reference/test/performance.md invokes the frozen-revision benchmark builder.
@@ -146,6 +161,8 @@ const repositoryScriptEntries = [
   "scripts/bench-channel-ingress-writer.ts!",
   // The performance guide and transcript driver invoke these tools and preloads by path.
   "scripts/lib/gateway-bench-transport-preload.ts!",
+  // Its source header documents this opt-in Node worker allocation preload.
+  "scripts/lib/gateway-bench-heap-profile.mjs!",
   // The performance guide and retained package-integrity rerun invoke these benchmarks by path.
   "scripts/bench-package-integrity.ts!",
   "scripts/perf/cron-delivery-gateway-entry.ts!",
@@ -159,6 +176,7 @@ const repositoryScriptEntries = [
   "scripts/bench-standalone-wasm.mjs!",
   "scripts/generate-social-preview.mts!",
   "scripts/perf/plugin-invocation-scope-measure.ts!",
+  "scripts/perf/prepared-plugin-lease-measure.mjs!",
   "scripts/perf/plugin-state-polling.mts!",
   "scripts/bench-codex-validators.mts!",
   "scripts/bench-control-ui-navigation.ts!",
@@ -281,6 +299,8 @@ const repositoryScriptEntries = [
   "scripts/e2e/lib/openai-chat-tools/write-config.mjs!",
   "scripts/e2e/lib/package-git-fixture.mjs!",
   "scripts/e2e/lib/plugin-lifecycle-matrix/measure.mjs!",
+  // Manual container proof executes the registered updater through this exact entrypoint.
+  "scripts/e2e/lib/plugin-update/cohort-rollback-scenario.mjs!",
   "scripts/e2e/lib/plugin-update/registry-server.mjs!",
   "scripts/e2e/lib/plugins/npm-registry-server.mjs!",
   "scripts/e2e/lib/release-plugin-marketplace/lifecycle-assertions.mjs!",
@@ -308,15 +328,20 @@ const repositoryScriptEntries = [
   // run.sh invokes this CLI and preloads it into updater/Doctor children.
   "scripts/e2e/lib/upgrade-survivor/dreaming-cron.mjs!",
   "scripts/e2e/lib/upgrade-survivor/formerly-bundled-plugin-doctor.mjs!",
-  // Installed recovery launches its driver and preloads its fault observer by path.
+  // Installed recovery launches its driver/access probe and preloads its fault observer by path.
+  "scripts/e2e/lib/upgrade-survivor/installed-recovery-access.mjs!",
   "scripts/e2e/lib/upgrade-survivor/installed-recovery-fault.mjs!",
   "scripts/e2e/lib/upgrade-survivor/installed-recovery.mjs!",
+  "scripts/e2e/lib/upgrade-survivor/older-runtime-recovery-observer.mjs!",
+  "scripts/e2e/lib/upgrade-survivor/older-runtime-recovery.mjs!",
   "scripts/e2e/lib/upgrade-survivor/legacy-operator-restored-index.mjs!",
   "scripts/e2e/lib/upgrade-survivor/missing-configured-plugin-migration.mjs!",
   // run.sh starts this persistent native peer as a separate process.
   "scripts/e2e/lib/upgrade-survivor/native-assignment-app-server.mjs!",
   // native-plugin-ui.sh invokes fixture creation and packaged upgrade probes through Node.
   "scripts/e2e/lib/upgrade-survivor/native-plugin-ui.mjs!",
+  // Published driver CI and documented Crabbox runs invoke the native matrix.
+  "scripts/e2e/lib/upgrade-survivor/native-systemd.mjs!",
   // package-activation-recovery.sh preloads this observer into the released updater.
   "scripts/e2e/lib/upgrade-survivor/package-activation-fault.mjs!",
   // run.sh preloads this fixture adapter through NODE_OPTIONS by path.
@@ -1193,6 +1218,8 @@ const config = {
         "open",
         "openclaw",
         "sleep",
+        // usage-refresh-stats-measure.ts inspects benchmark fixtures with the host SQLite CLI.
+        "sqlite3",
         "swiftlint",
         "uptime",
         "xcrun",
