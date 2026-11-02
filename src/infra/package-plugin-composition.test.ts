@@ -2,6 +2,53 @@ import { describe, expect, it } from "vitest";
 import { composePackagePlugins } from "./package-plugin-composition.js";
 
 describe("selected plugin package composition", () => {
+  it("composes a private prerelease host with same-build Slack's satisfied host API floor", () => {
+    const result = composePackagePlugins({ name: "openclaw", version: "2026.10.10-102" }, [
+      {
+        id: "slack",
+        packageJson: {
+          name: "@openclaw/slack",
+          version: "2026.10.9",
+          peerDependencies: { openclaw: ">=2026.10.9" },
+        },
+      },
+    ]);
+    expect(result.version).toBe("2026.10.10-102");
+  });
+
+  it.each(["2026.10.8-102", "2027.1.1-102"])("still rejects out-of-range host %s", (version) => {
+    expect(() =>
+      composePackagePlugins({ name: "openclaw", version }, [
+        {
+          id: "slack",
+          packageJson: {
+            name: "@openclaw/slack",
+            version: "2026.10.9",
+            peerDependencies: { openclaw: ">=2026.10.9 <2027.0.0" },
+          },
+        },
+      ]),
+    ).toThrow("requires peer openclaw");
+  });
+
+  it("does not admit a prerelease third-party peer by relaxing host composition", () => {
+    expect(() =>
+      composePackagePlugins(
+        { name: "openclaw", version: "2026.10.10-102", dependencies: { other: "1.1.0-beta.1" } },
+        [
+          {
+            id: "slack",
+            packageJson: {
+              name: "@openclaw/slack",
+              version: "2026.10.9",
+              peerDependencies: { other: ">=1.0.0" },
+            },
+          },
+        ],
+      ),
+    ).toThrow("requires peer other");
+  });
+
   it("preserves npm's all-dependencies bundle form when selecting plugins", () => {
     const result = composePackagePlugins(
       {

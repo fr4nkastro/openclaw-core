@@ -64,7 +64,10 @@ export function composePackagePlugins<T extends DistributionPackageManifest>(
           : (composed.dependencies?.[name] ?? composed.optionalDependencies?.[name]);
       if (
         (!version && !plugin.peerDependenciesMeta?.[name]?.optional) ||
-        (version && !satisfies(version, range))
+        // Explicit source composition owns the host/plugin build cohort. Private
+        // host versions may be prereleases; retain the declared API bounds while
+        // allowing that host identity. Third-party peer resolution stays strict.
+        (version && !satisfies(version, range, { includePrerelease: name === composed.name }))
       ) {
         throw new Error(`Selected plugin ${id} requires peer ${name}@${range} in the distribution`);
       }
