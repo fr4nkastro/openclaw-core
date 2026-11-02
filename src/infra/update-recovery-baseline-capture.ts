@@ -10,6 +10,7 @@ import { createDoctorRehearsalDatabaseCoverage } from "../commands/doctor-rehear
 import { createConfigIO } from "../config/io.factory.js";
 import { resolveConfigWidePluginMetadataSnapshotAsync } from "../config/io.plugin-metadata.js";
 import { resolveConfigPath, resolveStateDir } from "../config/paths.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import type { PluginDoctorMigrationBackupWarning } from "../plugins/doctor-contract-module.js";
 import { preparePluginDoctorMigrationBackupResources } from "../plugins/doctor-contract-registry.js";
 import { hasCommandProcessCleanupError } from "../process/exec-result.js";
@@ -52,6 +53,39 @@ import { canonicalEntryPath } from "./update-recovery-path.js";
 import { readUpdateRunDriver, type UpdateRunDriver } from "./update-run-driver.js";
 
 declare const SEALED_RUNTIME_BUILD: boolean;
+
+const captureLog = createSubsystemLogger("doctor/recovery-capture");
+type RecoveryCapturePhase =
+  | "reuse"
+  | "capture"
+  | "config-read"
+  | "config-resolve"
+  | "plugin-resource-preparation"
+  | "resource-traversal"
+  | "database-acquisition";
+
+/** Fixed-size debug events only: never include configuration, paths, results, or errors. */
+export async function withRecoveryCapturePhase<T>(
+  phase: RecoveryCapturePhase,
+  run: () => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  const started = performance.now();
+  captureLog.debug("Recovery capture phase", { phase, event: "start" });
+  let outcome: "success" | "failure" | "cancelled" = "failure";
+  try {
+    const result = await run();
+    outcome = "success";
+    return result;
+  } finally {
+    captureLog.debug("Recovery capture phase", {
+      phase,
+      event: "end",
+      outcome: outcome === "failure" && signal?.aborted ? "cancelled" : outcome,
+      elapsedMs: Math.round(performance.now() - started),
+    });
+  }
+}
 
 type Entry = UpdateRecoveryBackupManifest["entries"][number];
 type ResourceKind = "file" | "directory" | "sqlite";
@@ -147,7 +181,11 @@ export function captureUpdateRecoveryBaseline(params: {
       observe: false,
       pluginValidation: "core-only",
     });
-    const configuration = await configIO.readConfigFileSnapshotForWrite();
+    const configuration = await withRecoveryCapturePhase(
+      "config-read",
+      () => configIO.readConfigFileSnapshotForWrite(),
+      params.signal,
+    );
     assertCurrent();
     const snapshot = configuration.snapshot;
     if (path.resolve(snapshot.path) !== path.resolve(resolveConfigPath(env))) {
@@ -156,10 +194,11 @@ export function captureUpdateRecoveryBaseline(params: {
     if (snapshot.exists && snapshot.raw === null) {
       throw new Error("Original update configuration is unreadable.");
     }
-    const configCapture = await resolveBackupConfigCapture(configuration, {
-      env,
-      pluginValidation: "core-only",
-    });
+    const configCapture = await withRecoveryCapturePhase(
+      "config-resolve",
+      () => resolveBackupConfigCapture(configuration, { env, pluginValidation: "core-only" }),
+      params.signal,
+    );
     assertCurrent();
     const creator = readUpdateRunDriver();
     if (!creator) {
@@ -222,7 +261,11 @@ export function captureUpdateRecoveryBaseline(params: {
       resolveDatabaseFamilyEngines(snapshot.sourceConfig).state === "postgres"
         ? collect()
         : withOpenClawStateDatabaseReadSnapshot(collect, { env });
-    const declared = await collectResources();
+    const declared = await withRecoveryCapturePhase(
+      "plugin-resource-preparation",
+      collectResources,
+      params.signal,
+    );
     assertCurrent();
     for (const resource of declared) {
       declare(resource.path, resource.kind);
@@ -328,9 +371,15 @@ export function captureUpdateRecoveryBaseline(params: {
         throw new Error(`Original update resource has an unsupported file kind: ${pathname}`);
       }
     };
-    for (const [pathname, kind] of resources) {
-      await visit(pathname, kind);
-    }
+    await withRecoveryCapturePhase(
+      "resource-traversal",
+      async () => {
+        for (const [pathname, kind] of resources) {
+          await visit(pathname, kind);
+        }
+      },
+      params.signal,
+    );
     assertCurrent();
     // Plugin resource trees can exceed the database budget; refuse before the first capture write.
     checkPayloadCapacity();
@@ -344,24 +393,29 @@ export function captureUpdateRecoveryBaseline(params: {
       await createPrivateSqliteDirectory(path.join(directory, "payload"));
       requireDirectorySync(await syncDirectory(store), "Original update capture root");
       assertCurrent();
-      const databases = await createUpdateDatabaseBackup({
-        backupRoot: path.join(directory, "database"),
-        stateDir,
-        config: snapshot.sourceConfig,
-        env,
-        signal: params.signal,
-        nodeRunner: params.nodeRunner,
-        timeoutMs: params.timeoutMs,
-        acquisition: params.acquisition,
-        purpose: "original-state",
-        integrityCheck: params.fullIntegrityCheck ? "full" : "quick",
-        preserveSourceArtifacts: true,
-        additionalPaths: [...forcedSqlite],
-        additionalFiles: [...files.keys()].filter((pathname) => !configPaths.has(pathname)),
-        rehearsal,
-        // Capture is best effort; its callers continue and own the next-step guidance.
-        retryAdvice: false,
-      });
+      const databases = await withRecoveryCapturePhase(
+        "database-acquisition",
+        () =>
+          createUpdateDatabaseBackup({
+            backupRoot: path.join(directory, "database"),
+            stateDir,
+            config: snapshot.sourceConfig,
+            env,
+            signal: params.signal,
+            nodeRunner: params.nodeRunner,
+            timeoutMs: params.timeoutMs,
+            acquisition: params.acquisition,
+            purpose: "original-state",
+            integrityCheck: params.fullIntegrityCheck ? "full" : "quick",
+            preserveSourceArtifacts: true,
+            additionalPaths: [...forcedSqlite],
+            additionalFiles: [...files.keys()].filter((pathname) => !configPaths.has(pathname)),
+            rehearsal,
+            // Capture is best effort; its callers continue and own the next-step guidance.
+            retryAdvice: false,
+          }),
+        params.signal,
+      );
       assertCurrent();
       const databasePaths = new Set([
         ...databases.databases.map((file) => file.path),

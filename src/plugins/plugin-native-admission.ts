@@ -28,6 +28,7 @@ import {
   createPluginNativeReferenceValidator,
   linkPluginNativeReference,
 } from "./plugin-native-reference.js";
+import { resolveRetainedPluginHost } from "./plugin-native-retained-host.js";
 import { retainPluginNativeRoot } from "./plugin-native-root-lease.js";
 import { resolvePluginModulePackageRoot } from "./plugin-package-metadata-capture.js";
 import { getPluginSourceAdmissionPublisher } from "./plugin-source-admission-context.js";
@@ -461,7 +462,8 @@ export function createPluginNativeAdmission(
       }
       const link = path.join(namespace.capturedRoot, "node_modules", "openclaw");
       const present = fs.lstatSync(link, { throwIfNoEntry: false });
-      if (present && fs.realpathSync(link) !== hostRoot) {
+      const linkedHost = present ? resolveRetainedPluginHost(link, present) : undefined;
+      if (present && linkedHost !== hostRoot) {
         const replacement = createNamespace(
           namespace.sourceDirectory,
           namespace.sourceDirectory,
