@@ -99,6 +99,11 @@ jobs:
             src/infra/sqlite-wal.admission.test.ts src/infra/sqlite-wal.idle.test.ts \
             src/infra/sqlite-worker-operation-admission.timeout.test.ts \
             src/state/openclaw-state-lease-renewal.worker.test.ts \
+            src/plugins/doctor-contract-registry.load-errors.test.ts \
+            src/plugins/plugin-native-admission.dangling-host.test.ts \
+            src/plugins/plugin-native-namespace.test.ts \
+            src/infra/update-recovery-baseline-capture.timing.test.ts \
+            src/commands/doctor-original-capture.test.ts \
             2>&1 | tee "$RUNNER_TEMP/fork-release/wal-regression.log"
 
       - name: Build full package
