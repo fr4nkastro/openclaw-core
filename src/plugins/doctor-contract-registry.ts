@@ -25,12 +25,14 @@ import {
 } from "./doctor-compatibility-migration.js";
 import { resolvePluginDoctorContractArtifact } from "./doctor-contract-artifact.js";
 import { loadLegacyChannelStateMigrationDetector } from "./doctor-contract-legacy-setup.js";
+import { handlePluginDoctorContractLoadError } from "./doctor-contract-load-error.js";
 import {
   coercePluginDoctorContractModule,
   type PluginDoctorCompatibilityNormalizer,
   type PluginDoctorContractModule,
   type PluginDoctorStateMigrationEntry,
 } from "./doctor-contract-module.js";
+import type { PluginDoctorRegistryParams } from "./doctor-contract-registry-params.js";
 import {
   collectRelevantDoctorPluginIds,
   collectRelevantDoctorPluginIdsForTouchedPaths,
@@ -105,17 +107,7 @@ export function isTrustedForDurableStores(record: PluginManifestRegistryRecord):
 
 type PluginManifestRegistryRecord = PluginManifestRegistry["plugins"][number];
 
-export type PluginDoctorRegistryParams = {
-  config?: OpenClawConfig;
-  workspaceDir?: string;
-  env?: NodeJS.ProcessEnv;
-  pluginIds?: readonly string[];
-  /** Candidate generation prepared by the install owner before publication. */
-  manifestRegistry?: PluginManifestRegistry;
-  historicalWebhookListeners?: PluginDoctorCompatibilityOptions["historicalWebhookListeners"];
-  /** Port preflight inspects retained data even when its selected owner is disabled. */
-  includeDisabled?: boolean;
-};
+export type { PluginDoctorRegistryParams } from "./doctor-contract-registry-params.js";
 
 /** Include manifest-owned legacy roots for config repair, never session ownership. */
 export function collectDoctorConfigRepairPluginIds(
@@ -197,7 +189,12 @@ function loadPluginDoctorContractEntry(
     log.warn(
       `failed to load doctor contract for ${record.id} from ${contractArtifact.modulePath}: ${formatErrorMessage(error)}`,
     );
-    return error instanceof PluginDependencyLinkError ? error : null;
+    return handlePluginDoctorContractLoadError(
+      error,
+      surface,
+      record.id,
+      contractArtifact.modulePath,
+    );
   }
 }
 
@@ -427,6 +424,8 @@ export function listPluginDoctorSessionStoreAgentIds(
   }
   return [...agentIds].toSorted();
 }
+
+export { PluginDoctorContractUnavailableError } from "./doctor-contract-load-error.js";
 
 export class PluginDoctorStateMigrationDeclarationError extends Error {}
 
