@@ -49,11 +49,43 @@ Installation uses `pnpm install --frozen-lockfile`. `pnpm build:package` runs wi
 `NODE_OPTIONS=--max-old-space-size=6144`, full declaration emission, and no build
 cache. The package profile includes the Control UI and build metadata.
 
+### Same-SHA Slack cohort (fork issue #1)
+
+The build selects `OPENCLAW_INTERNAL_DOCKER_BUILD_PLUGIN_IDS=slack`, so the
+unified host compiler emits the external Slack runtime from the same checkout.
+After build, `scripts/fork-slack-cohort.mjs stage <root> <full-source-sha>`
+requires `dist/build-info.json.commit` to match that SHA and calls the existing
+`stampDesktopRuntimePlugins` owner to record
+`stagedOfficialPlugins: { commit, pluginIds: ["slack"] }`. Despite that historical
+field name, this is **bundled distribution provenance**, not registry trust.
+The fork deliberately uses explicit composition even for a tagged private build;
+it does not use the desktop release planner, which excludes published plugins.
+
+Canonical `--bundle-plugin slack` composition then includes Slack files and
+runtime dependencies, sets the built package's `openclaw.build.bundledDist` to
+true, and regenerates the dist inventory so installation does not prune it.
+Neither marking a raw source plugin as official nor installing a separate npm
+tarball establishes this contract. No heartbeat compatibility shim is supplied.
+Explicit source composition accepts a private prerelease host inside Slack's
+declared API range (`2026.10.10-102` versus `>=2026.10.9`); otherwise default
+semver prerelease exclusion rejects this fork before packing. This packaging-only
+host-peer check retains range bounds and leaves third-party peers strict. It
+changes no plugin discovery, registry trust, or migration authorization checks.
+
+`src/plugins/dev-source-root.ts` gives this commit-matched staged bundle source
+priority over a tracked global npm generation. An absent/mismatched SHA receives
+no such priority; explicit `plugins.load.paths` overrides remain intentional
+overrides and must be audited before deployment. Regression tests exercise the
+real manifest-registry builder with a retained `@openclaw/slack@2026.10.9`
+candidate, check the selected root and bundled trust, and preserve routing/config
+and install records. They do not modify production or execute migrations.
+
 Packing uses the existing canonical owner:
 
 ```bash
 node scripts/package-openclaw-for-docker.mjs \
   --skip-build --pnpm-pack --allow-unreleased-changelog \
+  --bundle-plugin slack \
   --output-dir "$RUNNER_TEMP/fork-pack"
 ```
 
@@ -82,18 +114,32 @@ scripts into an isolated temporary global prefix and runs `openclaw --version`
 and `--help` with isolated home, config, state, and cache paths. No Gateway is
 started and no production configuration is copied.
 
+Archive checks also require matching core/staged Slack SHAs, Slack distribution
+ownership, and `dist/extensions/slack/runtime-api.js`. On the isolated installed
+artifact, the cohort smoke imports both Slack's entry and **runtime-api** (the
+monitor/provider graph that a lazy entry-only smoke misses) on plain Node. It
+does not call `monitorSlackProvider`, start Socket Mode, or send a message.
+`plugins list --json` must independently discover exactly one Slack, with bundled
+origin and the installed artifact's root. Real representative-state migration
+authority, retained-generation convergence, connected-channel startup and delivery
+remain separate canary/deployment gates; a clean-home import is not those gates.
+
 Every run attempts to retain a 30-day Actions artifact named
 `fork-hotfix-RUN_ID-RUN_ATTEMPT`, including available build/install/pack logs.
 A setup failure before evidence exists can leave no artifact. Failed build or
 smoke evidence is diagnostic, not a qualified package. Successful evidence adds:
 
 - `openclaw-VERSION.tgz`, copied into the artifact only after CLI smoke passes.
-- `SHA256SUMS`, covering the tgz, provenance, and source-SHA receipt.
+- `SHA256SUMS`, covering the tgz, provenance, source-SHA receipt, and Slack receipt.
 - `provenance.json`, recording exact source SHA, requested ref, workflow identity,
   run ID/attempt/URL, package version, toolchain, tarball hash, and validation status.
 - `SOURCE_SHA.txt`, containing the full source commit SHA.
+- `slack-cohort.json`, recording the matching SHA, bundled relative path, runtime
+  import result, and explicitly false official registry provenance. The enclosing
+  `provenance.json.slack_cohort` additionally records installed discovery success;
+  `plugins-list.json` is retained as diagnostic evidence in the Actions artifact.
 
-Release runs upload only these four deliverables, not diagnostic logs, then
+Release runs upload only these five deliverables, not diagnostic logs, then
 download the assets and verify the checksum manifest and bytes. Provenance is a
 plain build receipt, **not** a signed GitHub/SLSA attestation. No OIDC permission
 is requested. Existing assets are never silently overwritten: upload omits
