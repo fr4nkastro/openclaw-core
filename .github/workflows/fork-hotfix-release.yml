@@ -91,6 +91,16 @@ jobs:
           set -euo pipefail
           pnpm install --frozen-lockfile 2>&1 | tee "$RUNNER_TEMP/fork-release/install.log"
 
+      - name: Verify WAL admission regression and lease safety
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run --config test/vitest/vitest.unit-src.config.ts \
+            src/infra/sqlite-wal.admission.test.ts src/infra/sqlite-wal.idle.test.ts \
+            src/infra/sqlite-worker-operation-admission.timeout.test.ts \
+            src/state/openclaw-state-lease-renewal.worker.test.ts \
+            2>&1 | tee "$RUNNER_TEMP/fork-release/wal-regression.log"
+
       - name: Build full package
         run: |
           set -euo pipefail

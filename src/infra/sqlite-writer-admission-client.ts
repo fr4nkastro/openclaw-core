@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { MessagePort, type Transferable } from "node:worker_threads";
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { readAgentDatabaseExecutionAuthority } from "../state/openclaw-agent-execution-authority.js";
@@ -20,6 +21,16 @@ import { readSqliteWorkerRequestCustody } from "./sqlite-worker-request-custody.
 const REQUESTED = 0;
 const GRANTED = 1;
 const TIMED_OUT = 3;
+const admissionTimeout = new AsyncLocalStorage<number>();
+
+/** Bound each host wait in synchronous best-effort work, including nested commit admission. */
+export function withSqliteWorkerAdmissionTimeout<T>(timeoutMs: number, operation: () => T): T {
+  const inherited = admissionTimeout.getStore();
+  return admissionTimeout.run(
+    inherited === undefined ? timeoutMs : Math.min(inherited, timeoutMs),
+    operation,
+  );
+}
 
 /** Cleanup borrows a physical database, independently of the actor's other clients. */
 export function assertSqliteWorkerDatabaseIdentity(owner: SqliteWorkerOperationContext): void {
@@ -67,6 +78,14 @@ export function requestSqliteWorkerOperationAdmission(
     throw new SqliteWorkerError("SQLite source reservations prohibit host admission", "closed");
   }
   assertRequestCustody(scope.owner);
+  const timeoutMs = admissionTimeout.getStore();
+  if (timeoutMs !== undefined) {
+    request = {
+      ...request,
+      deadlineMs:
+        request.deadlineMs === undefined ? timeoutMs : Math.min(request.deadlineMs, timeoutMs),
+    };
+  }
   const decision = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
   const startedAt = Date.now();
   const deadlineNs =
