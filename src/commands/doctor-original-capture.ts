@@ -106,7 +106,7 @@ export async function preserveDoctorOriginalState(params: {
       );
       return { findings, warnings };
     }
-    const { captureUpdateRecoveryBaseline } =
+    const { captureUpdateRecoveryBaseline, withRecoveryCapturePhase } =
       await import("../infra/update-recovery-baseline-capture.js");
     const { retireExpiredStandaloneDoctorCaptures } =
       await import("../infra/doctor-capture-retention.js");
@@ -184,29 +184,39 @@ export async function preserveDoctorOriginalState(params: {
       // repair can retain the newest standalone original only after exact proof.
       reused = params.fullIntegrityCheck
         ? undefined
-        : await findReusableDoctorCapture({
-            stateDir,
-            installRoot,
-            env: params.env,
-            assertCurrent: assertCaptureCurrent,
+        : await withRecoveryCapturePhase(
+            "reuse",
+            () =>
+              findReusableDoctorCapture({
+                stateDir,
+                installRoot,
+                env: params.env,
+                assertCurrent: assertCaptureCurrent,
+                signal,
+              }),
             signal,
-          });
+          );
       assertCaptureCurrent();
       standaloneRunId = reused ? path.basename(reused.directory) : `doctor-${randomUUID()}`;
       // Await cancellation settlement; racing a timeout could release repair while copies still run.
       captured = reused
         ? { ref: reused, warnings: [], diagnostics: { databaseWarnings: [] } }
-        : await captureUpdateRecoveryBaseline({
-            runId: standaloneRunId,
-            installRoot,
-            env: params.env,
-            drivers: [driver],
-            assertCurrent: assertCaptureCurrent,
+        : await withRecoveryCapturePhase(
+            "capture",
+            () =>
+              captureUpdateRecoveryBaseline({
+                runId: standaloneRunId,
+                installRoot,
+                env: params.env,
+                drivers: [driver],
+                assertCurrent: assertCaptureCurrent,
+                signal,
+                acquisition: { mode: "maintenance-owner" },
+                fullIntegrityCheck: params.fullIntegrityCheck,
+                discardIncompleteOnFailure: { assertCurrent },
+              }),
             signal,
-            acquisition: { mode: "maintenance-owner" },
-            fullIntegrityCheck: params.fullIntegrityCheck,
-            discardIncompleteOnFailure: { assertCurrent },
-          });
+          );
       assertCaptureCurrent();
     } finally {
       clearTimeout(timer);
