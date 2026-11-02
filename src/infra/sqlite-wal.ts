@@ -47,6 +47,7 @@ import {
   type SqliteWalPeriodicRequest,
   type SqliteWalPeriodicResult,
 } from "./sqlite-wal-write-admission.js";
+import { withSqliteWorkerAdmissionTimeout } from "./sqlite-writer-admission-client.js";
 
 export type { SqliteWalHealth } from "./sqlite-wal-checkpoint.js";
 export type { SqliteWalReclamationResult } from "./sqlite-wal-reclamation.js";
@@ -61,6 +62,8 @@ export type { SqliteWalReclamationResult } from "./sqlite-wal-reclamation.js";
 const DEFAULT_SQLITE_WAL_AUTOCHECKPOINT_PAGES = 16_384;
 const DEFAULT_SQLITE_WAL_CHECKPOINT_TICK_MS = 10 * 1000;
 const DEFAULT_SQLITE_WAL_CHECKPOINT_INTERVAL_MS = 30 * 60 * 1000;
+// A periodic pass can skip instead of parking the only writer behind a blocked host.
+const SQLITE_WAL_HOST_ADMISSION_TIMEOUT_MS = 100;
 // SQLite applies this ceiling when a fully checkpointed WAL resets on the next
 // commit. It matches the inline autocheckpoint threshold so only pathological
 // high-water marks pay the truncation cost.
@@ -410,52 +413,59 @@ export function configureSqliteWalMaintenance(
     }
     const runTickCheckpoint = (mode: SqliteWalCheckpointMode) =>
       checkpointOwner.checkpoint(mode, { quiet });
-    const completed = runMaintenance(() => {
-      let checkpointed: boolean;
-      if (checkpointOnly) {
-        // SQLite never calls the busy handler for PASSIVE; this pass cannot vacuum.
-        admit?.("transaction");
-        checkpointed = runTickCheckpoint("PASSIVE");
-      } else {
-        const reclaimed = reclaimSqliteWalFreePages(db, runTickCheckpoint, {
-          checkpointMode: request.checkpointMode,
-          maxPages: request.maxPages,
-          beforeMutation: () => admit?.("transaction"),
-          onCommit: () => admit?.("commit"),
-        });
-        checkpointed = reclaimed.checkpointCompleted;
-        if (
-          checkpointed &&
-          reclaimed.freePagesBefore !== null &&
-          reclaimed.remainingFreePages !== null
-        ) {
-          reclaimedPages = Math.min(
-            reclaimed.vacuumPagesRequested,
-            reclaimed.freePagesBefore - reclaimed.remainingFreePages,
-          );
-        }
-      }
-      if (
-        checkpointed &&
-        request.checkpointMode === "PASSIVE" &&
-        (checkpointOwner.health?.walBytes ?? 0) > DEFAULT_SQLITE_WAL_JOURNAL_SIZE_LIMIT_BYTES
-      ) {
-        // A completed PASSIVE checkpoint need not recycle its high-water file
-        // until another commit. Try once without waiting for readers or writers.
-        admit?.("transaction");
-        runWithSqliteBusyTimeout(db, 0, () => runTickCheckpoint("TRUNCATE"));
-      }
-      if (checkpointed && request.maxPages > 0 && !request.continuation) {
-        try {
-          maintain?.();
-        } catch (error) {
-          if (!isSqliteLockError(error)) {
-            throw error;
+    // Autonomous maintenance is best-effort. A blocked host must not retain
+    // SQLite's only writer while independent lease heartbeats need to renew.
+    // Keep live transaction/commit grants; timeout cancels the shared decision
+    // and the transaction owner rolls back before releasing native custody.
+    // Scope nested planner-statistics admission too, not just incremental vacuum.
+    const completed = runMaintenance(() =>
+      withSqliteWorkerAdmissionTimeout(SQLITE_WAL_HOST_ADMISSION_TIMEOUT_MS, () => {
+        let checkpointed: boolean;
+        if (checkpointOnly) {
+          // SQLite never calls the busy handler for PASSIVE; this pass cannot vacuum.
+          admit?.("transaction");
+          checkpointed = runTickCheckpoint("PASSIVE");
+        } else {
+          const reclaimed = reclaimSqliteWalFreePages(db, runTickCheckpoint, {
+            checkpointMode: request.checkpointMode,
+            maxPages: request.maxPages,
+            beforeMutation: () => admit?.("transaction"),
+            onCommit: () => admit?.("commit"),
+          });
+          checkpointed = reclaimed.checkpointCompleted;
+          if (
+            checkpointed &&
+            reclaimed.freePagesBefore !== null &&
+            reclaimed.remainingFreePages !== null
+          ) {
+            reclaimedPages = Math.min(
+              reclaimed.vacuumPagesRequested,
+              reclaimed.freePagesBefore - reclaimed.remainingFreePages,
+            );
           }
         }
-      }
-      return checkpointed;
-    });
+        if (
+          checkpointed &&
+          request.checkpointMode === "PASSIVE" &&
+          (checkpointOwner.health?.walBytes ?? 0) > DEFAULT_SQLITE_WAL_JOURNAL_SIZE_LIMIT_BYTES
+        ) {
+          // A completed PASSIVE checkpoint need not recycle its high-water file
+          // until another commit. Try once without waiting for readers or writers.
+          admit?.("transaction");
+          runWithSqliteBusyTimeout(db, 0, () => runTickCheckpoint("TRUNCATE"));
+        }
+        if (checkpointed && request.maxPages > 0 && !request.continuation) {
+          try {
+            maintain?.();
+          } catch (error) {
+            if (!isSqliteLockError(error)) {
+              throw error;
+            }
+          }
+        }
+        return checkpointed;
+      }),
+    );
     // A sibling commit during the checkpoint is picked up by the next tick.
     // Blocked/error observations keep retrying even without another write.
     completedTickRevision =
