@@ -49,10 +49,16 @@ Installation uses `pnpm install --frozen-lockfile`. `pnpm build:package` runs wi
 `NODE_OPTIONS=--max-old-space-size=6144`, full declaration emission, and no build
 cache. The package profile includes the Control UI and build metadata.
 
-### Same-SHA Slack cohort (fork issue #1)
+### Same-SHA Codex and Slack cohort (fork issue #1)
 
-The build selects `OPENCLAW_INTERNAL_DOCKER_BUILD_PLUGIN_IDS=slack`, so the
-unified host compiler emits the external Slack runtime from the same checkout.
+The build selects `OPENCLAW_INTERNAL_DOCKER_BUILD_PLUGIN_IDS=codex,slack`, so the
+unified host compiler emits the external Codex and Slack runtimes from the same
+checkout. Codex joined the cohort in `2026.10.10-104`: the registry
+`@openclaw/codex@2026.10.9` and `@2026.10.10` builds import SDK exports this
+private host does not provide (`sanitizeToolArgs`, heartbeat tool helpers), so the
+`gpt-6-luna` fallback failed when the codex harness loaded. The smoke step
+statically resolves every `openclaw/plugin-sdk/*` import of each cohort plugin,
+named exports included, against the installed core, so lazy chunks are covered.
 After build, `scripts/fork-slack-cohort.mjs stage <root> <full-source-sha>`
 requires `dist/build-info.json.commit` to match that SHA and calls the existing
 `stampDesktopRuntimePlugins` owner to record
