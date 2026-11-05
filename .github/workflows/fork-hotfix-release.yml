@@ -31,8 +31,8 @@ jobs:
       OPENCLAW_TSDOWN_MAX_OLD_SPACE_MB: "6144"
       OPENCLAW_RUN_NODE_SKIP_DTS_BUILD: "0"
       OPENCLAW_BUILD_CACHE: "0"
-      # Compile external Slack in the same unified host build, not from npm.
-      OPENCLAW_INTERNAL_DOCKER_BUILD_PLUGIN_IDS: "slack"
+      # Compile external Codex and Slack in the same unified host build, not from npm.
+      OPENCLAW_INTERNAL_DOCKER_BUILD_PLUGIN_IDS: "codex,slack"
       CI: "true"
     steps:
       - name: Checkout selected fork source
@@ -127,6 +127,7 @@ jobs:
           node scripts/fork-slack-cohort.mjs stage "$PWD" "$(git rev-parse HEAD)"
           node scripts/package-openclaw-for-docker.mjs \
             --skip-build --pnpm-pack --allow-unreleased-changelog \
+            --bundle-plugin codex \
             --bundle-plugin slack \
             --output-dir "$RUNNER_TEMP/fork-pack" \
             2>&1 | tee "$RUNNER_TEMP/fork-release/pack.log"
@@ -150,11 +151,12 @@ jobs:
               assert manifest['version'] == proof['package_version']
               build = json.load(tar.extractfile('package/dist/build-info.json'))
               assert build['commit'] == proof['source_sha']
-              assert build['stagedOfficialPlugins'] == dict(commit=proof['source_sha'], pluginIds=['slack'])
-              slack = json.load(tar.extractfile('package/dist/extensions/slack/package.json'))
-              assert slack['name'] == '@openclaw/slack'
-              assert slack['openclaw']['build']['bundledDist'] is True
-              assert '!dist/extensions/slack/**' not in manifest.get('files', [])
+              assert build['stagedOfficialPlugins'] == dict(commit=proof['source_sha'], pluginIds=['codex', 'slack'])
+              for plugin_id in ['codex', 'slack']:
+                  plugin = json.load(tar.extractfile(f'package/dist/extensions/{plugin_id}/package.json'))
+                  assert plugin['name'] == f'@openclaw/{plugin_id}'
+                  assert plugin['openclaw']['build']['bundledDist'] is True
+                  assert f'!dist/extensions/{plugin_id}/**' not in manifest.get('files', [])
               assert 'package/dist/extensions/slack/runtime-api.js' in names
               for name in ['package/openclaw.mjs', 'package/dist/index.js',
                            'package/dist/control-ui/index.html', 'package/docs/docs_map.md',
@@ -205,11 +207,13 @@ jobs:
           proof['slack_cohort'] = json.loads((root / 'slack-cohort.json').read_text())
           assert proof['slack_cohort']['source_sha'] == proof['source_sha']
           plugins = json.loads((root / 'plugins-list.json').read_text())['plugins']
-          selected = [p for p in plugins if p['id'] == 'slack']
-          assert len(selected) == 1, 'Slack must be discovered exactly once'
-          assert selected[0]['origin'] == 'bundled', 'Slack resolved to an external generation'
-          expected = pathlib.Path(os.environ['RUNNER_TEMP']) / 'fork-smoke/prefix/lib/node_modules/openclaw/dist/extensions/slack'
-          assert pathlib.Path(selected[0]['rootDir']).resolve() == expected.resolve()
+          assert [p['plugin_id'] for p in proof['slack_cohort']['plugins']] == ['codex', 'slack']
+          for plugin_id in ['codex', 'slack']:
+              selected = [p for p in plugins if p['id'] == plugin_id]
+              assert len(selected) == 1, f'{plugin_id} must be discovered exactly once'
+              assert selected[0]['origin'] == 'bundled', f'{plugin_id} resolved to an external generation'
+              expected = pathlib.Path(os.environ['RUNNER_TEMP']) / f'fork-smoke/prefix/lib/node_modules/openclaw/dist/extensions/{plugin_id}'
+              assert pathlib.Path(selected[0]['rootDir']).resolve() == expected.resolve()
           proof['slack_cohort']['discovery_selection'] = 'bundled-installed-artifact'
           proof['status'] = 'package-and-cli-smoke-passed'
           (root / 'provenance.json').write_text(json.dumps(proof, indent=2) + '\n')
