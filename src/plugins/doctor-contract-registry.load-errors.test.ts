@@ -34,6 +34,7 @@ vi.mock("./manifest-owner-policy.js", () => ({}));
 vi.mock("./manifest-registry-build.js", () => ({}));
 vi.mock("./plugin-registry.js", () => ({}));
 vi.mock("./plugin-setup-module.js", () => ({
+  PluginSetupPreparationRequiredError: class PluginSetupPreparationRequiredError extends Error {},
   getPluginSetupModuleLoader: () =>
     Object.assign(mocks.load, { initialize: (run: () => unknown) => run() }),
 }));
