@@ -74,7 +74,15 @@ Neither marking a raw source plugin as official nor installing a separate npm
 tarball establishes this contract. No heartbeat compatibility shim is supplied.
 Explicit source composition accepts a private prerelease host inside Slack's
 declared API range (`2026.10.10-102` versus `>=2026.10.9`); otherwise default
-semver prerelease exclusion rejects this fork before packing. This packaging-only
+semver prerelease exclusion rejects this fork before packing.
+A numeric OpenClaw correction host is judged by its stable base, matching
+OpenClaw's own precedence (`2026.11.7-105` satisfies `>=2026.11.7`, which npm
+SemVer alone would reject).
+
+The fork version is `UPSTREAM-N`, where `UPSTREAM` is the upstream release the
+branch is based on and `N` is the fork's monotonic build counter (`2026.10.10-104`,
+then `2026.11.7-105` after rebasing onto upstream `v2026.11.7`). `-fork.N` style
+suffixes are rejected by `scripts/lib/release-version.mjs`. This packaging-only
 host-peer check retains range bounds and leaves third-party peers strict. It
 changes no plugin discovery, registry trust, or migration authorization checks.
 
