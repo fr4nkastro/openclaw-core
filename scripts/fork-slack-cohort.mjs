@@ -53,7 +53,9 @@ async function assertHostSdkImports(id, pluginRoot) {
           .trim()
           .replace(/^type\s+/, "")
           .split(/\s+as\s+/)[0];
-        if (name && !raw.trim().startsWith("type ")) set.add(name);
+        if (name && !raw.trim().startsWith("type ")) {
+          set.add(name);
+        }
       }
       required.set(subpath, set);
     }

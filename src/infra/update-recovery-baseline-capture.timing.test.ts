@@ -49,7 +49,9 @@ it.each([false, true])(
       withRecoveryCapturePhase(
         "plugin-resource-preparation",
         async () => {
-          if (cancelled) controller.abort(failure);
+          if (cancelled) {
+            controller.abort(failure);
+          }
           throw failure;
         },
         controller.signal,

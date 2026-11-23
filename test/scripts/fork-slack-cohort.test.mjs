@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { test } from "node:test";
 
 const sha = "a".repeat(40);
 const script = new URL("../../scripts/fork-slack-cohort.mjs", import.meta.url);
@@ -66,8 +67,6 @@ function run(operation, root, commit = sha) {
     encoding: "utf8",
   });
 }
-import { test } from "node:test";
-
 const workflow = readFileSync(
   new URL("../../.github/workflows/fork-hotfix-release.yml", import.meta.url),
   "utf8",
@@ -125,7 +124,9 @@ for (const commit of [undefined, "b".repeat(40), "short-sha"]) {
   test(`stage refuses missing/wrong build SHA (${commit}) without stamping`, (t) => {
     const root = fixture(t, commit);
     const file = path.join(root, "dist/build-info.json");
-    if (commit === undefined) writeFileSync(file, "{}");
+    if (commit === undefined) {
+      writeFileSync(file, "{}");
+    }
     const before = readFileSync(file, "utf8");
     assert.notEqual(run("stage", root).status, 0);
     assert.equal(readFileSync(file, "utf8"), before);

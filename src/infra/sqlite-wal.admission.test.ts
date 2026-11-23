@@ -156,7 +156,9 @@ it("bounds nested periodic maintenance commit without undoing an earlier authori
     if (nested) {
       stalled = true;
       now += 2_000_000_000n;
-      if (timeout !== undefined) return "timed-out";
+      if (timeout !== undefined) {
+        return "timed-out";
+      }
     }
     admission.service();
     return "ok";
