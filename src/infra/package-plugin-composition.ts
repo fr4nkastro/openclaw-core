@@ -1,6 +1,7 @@
-import { satisfies, valid } from "semver";
+import { parse, satisfies, valid } from "semver";
 import { listBundleDependencies } from "../../scripts/lib/package-bundle-dependencies.mts";
 import { validateBundledPackageDependencyAlignment } from "../../scripts/package-source-dependencies.mjs";
+import { isOpenClawCorrectionSemver } from "./semver.js";
 
 export type DistributionPackageManifest = {
   name: string;
@@ -15,6 +16,22 @@ export type DistributionPackageManifest = {
 };
 
 /** Shared dependency ownership for release packages and private node distributions. */
+/**
+ * OpenClaw ranks a numeric correction (`2026.11.7-105`) after its stable base,
+ * while npm SemVer ranks it before. Judge the host peer by that base so a
+ * same-build cohort composes; other prereleases keep only the range bounds.
+ */
+function satisfiesHostPeerRange(version: string, range: string): boolean {
+  const parsed = parse(version);
+  if (parsed && isOpenClawCorrectionSemver(parsed)) {
+    const base = `${parsed.major}.${parsed.minor}.${parsed.patch}`;
+    if (satisfies(base, range)) {
+      return true;
+    }
+  }
+  return satisfies(version, range, { includePrerelease: true });
+}
+
 export function composePackagePlugins<T extends DistributionPackageManifest>(
   packageJson: T,
   plugins: readonly { id: string; packageJson: DistributionPackageManifest }[],
@@ -67,7 +84,10 @@ export function composePackagePlugins<T extends DistributionPackageManifest>(
         // Explicit source composition owns the host/plugin build cohort. Private
         // host versions may be prereleases; retain the declared API bounds while
         // allowing that host identity. Third-party peer resolution stays strict.
-        (version && !satisfies(version, range, { includePrerelease: name === composed.name }))
+        (version &&
+          !(name === composed.name
+            ? satisfiesHostPeerRange(version, range)
+            : satisfies(version, range)))
       ) {
         throw new Error(`Selected plugin ${id} requires peer ${name}@${range} in the distribution`);
       }

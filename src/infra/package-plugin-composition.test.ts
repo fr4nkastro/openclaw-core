@@ -16,6 +16,35 @@ describe("selected plugin package composition", () => {
     expect(result.version).toBe("2026.10.10-102");
   });
 
+  it("composes an OpenClaw correction host with a same-base Slack host floor", () => {
+    const result = composePackagePlugins({ name: "openclaw", version: "2026.11.7-105" }, [
+      {
+        id: "slack",
+        packageJson: {
+          name: "@openclaw/slack",
+          version: "2026.11.7",
+          peerDependencies: { openclaw: ">=2026.11.7" },
+        },
+      },
+    ]);
+    expect(result.version).toBe("2026.11.7-105");
+  });
+
+  it("still rejects a correction host whose base is below the host floor", () => {
+    expect(() =>
+      composePackagePlugins({ name: "openclaw", version: "2026.11.6-105" }, [
+        {
+          id: "slack",
+          packageJson: {
+            name: "@openclaw/slack",
+            version: "2026.11.7",
+            peerDependencies: { openclaw: ">=2026.11.7" },
+          },
+        },
+      ]),
+    ).toThrow("requires peer openclaw");
+  });
+
   it.each(["2026.10.8-102", "2027.1.1-102"])("still rejects out-of-range host %s", (version) => {
     expect(() =>
       composePackagePlugins({ name: "openclaw", version }, [
