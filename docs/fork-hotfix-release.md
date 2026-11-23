@@ -51,7 +51,7 @@ cache. The package profile includes the Control UI and build metadata.
 
 ### Same-SHA Codex and Slack cohort (fork issue #1)
 
-The build selects `OPENCLAW_INTERNAL_DOCKER_BUILD_PLUGIN_IDS=codex,slack`, so the
+The build selects `OPENCLAW_INTERNAL_DOCKER_BUILD_PLUGIN_IDS=codex,slack,whatsapp`, so the
 unified host compiler emits the external Codex and Slack runtimes from the same
 checkout. Codex joined the cohort in `2026.10.10-104`: the registry
 `@openclaw/codex@2026.10.9` and `@2026.10.10` builds import SDK exports this
@@ -67,6 +67,11 @@ field name, this is **bundled distribution provenance**, not registry trust.
 The fork deliberately uses explicit composition even for a tagged private build;
 it does not use the desktop release planner, which excludes published plugins.
 
+WhatsApp joined the cohort in `2026.11.10-106`: the retained
+`@openclaw/whatsapp@2026.10.3` imports heartbeat helpers (`HEARTBEAT_PROMPT`,
+`HEARTBEAT_TOKEN`, `stripHeartbeatToken`) that 2026.11.x no longer exports from
+`plugin-sdk/reply-runtime`.
+
 Canonical `--bundle-plugin slack` composition then includes Slack files and
 runtime dependencies, sets the built package's `openclaw.build.bundledDist` to
 true, and regenerates the dist inventory so installation does not prune it.
@@ -74,7 +79,20 @@ Neither marking a raw source plugin as official nor installing a separate npm
 tarball establishes this contract. No heartbeat compatibility shim is supplied.
 Explicit source composition accepts a private prerelease host inside Slack's
 declared API range (`2026.10.10-102` versus `>=2026.10.9`); otherwise default
-semver prerelease exclusion rejects this fork before packing. This packaging-only
+semver prerelease exclusion rejects this fork before packing.
+A numeric OpenClaw correction host is judged by its stable base, matching
+OpenClaw's own precedence (`2026.11.10-106` satisfies `>=2026.11.10-beta.2`,
+which npm SemVer alone would reject).
+
+The fork version is `UPSTREAM-N`: `UPSTREAM` is the upstream release line the
+branch is based on and `N` is the fork's monotonic build counter, never reused
+(`2026.10.10-104`; `105` was an unreleased 2026.11.7 candidate; `2026.11.10-106`
+is based on upstream `v2026.11.10-beta.2`). `scripts/lib/release-version.mjs`
+accepts either `-beta.N` or a numeric correction, not both, so a beta base still
+uses the numeric counter. Before rebasing, compare
+`OPENCLAW_STATE_SCHEMA_VERSION`/`OPENCLAW_AGENT_SCHEMA_VERSION` in
+`src/state/openclaw-schema-versions.ts` with production: an older schema cannot
+open newer state. This packaging-only
 host-peer check retains range bounds and leaves third-party peers strict. It
 changes no plugin discovery, registry trust, or migration authorization checks.
 
@@ -92,6 +110,7 @@ Packing uses the existing canonical owner:
 node scripts/package-openclaw-for-docker.mjs \
   --skip-build --pnpm-pack --allow-unreleased-changelog \
   --bundle-plugin slack \
+  --bundle-plugin whatsapp \
   --output-dir "$RUNNER_TEMP/fork-pack"
 ```
 
