@@ -7,7 +7,7 @@ import { stampDesktopRuntimePlugins } from "./lib/desktop-runtime-plugins.mjs";
 
 // Plugins compiled from the same checkout as the private core. A registry
 // generation built against upstream SDK exports cannot load on this host.
-export const COHORT_PLUGIN_IDS = ["codex", "slack"];
+export const COHORT_PLUGIN_IDS = ["codex", "slack", "whatsapp"];
 
 const [operation, packageRoot, commit] = process.argv.slice(2);
 assert.ok(
@@ -49,7 +49,10 @@ async function assertHostSdkImports(id, pluginRoot) {
     for (const [, names, subpath] of fs.readFileSync(file, "utf8").matchAll(pattern)) {
       const set = required.get(subpath) ?? new Set();
       for (const raw of names?.slice(1, -1).split(",") ?? []) {
-        const name = raw.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0];
+        const name = raw
+          .trim()
+          .replace(/^type\s+/, "")
+          .split(/\s+as\s+/)[0];
         if (name && !raw.trim().startsWith("type ")) set.add(name);
       }
       required.set(subpath, set);
@@ -114,10 +117,6 @@ if (operation === "stage") {
     });
   }
   console.log(
-    JSON.stringify(
-      { source_sha: commit, plugins, official_registry_provenance: false },
-      null,
-      2,
-    ),
+    JSON.stringify({ source_sha: commit, plugins, official_registry_provenance: false }, null, 2),
   );
 }

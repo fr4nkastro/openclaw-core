@@ -35,6 +35,18 @@ function fixture(t, commit = sha) {
     path.join(codex, "harness.js"),
     'import { sanitizeToolResult as s } from "openclaw/plugin-sdk/agent-harness-runtime"; export const h = s;',
   );
+  const whatsapp = path.join(root, "dist/extensions/whatsapp");
+  mkdirSync(whatsapp, { recursive: true });
+  writeFileSync(
+    path.join(whatsapp, "package.json"),
+    JSON.stringify({
+      name: "@openclaw/whatsapp",
+      type: "module",
+      openclaw: { extensions: ["./index.js"], build: { bundledDist: true } },
+    }),
+  );
+  writeFileSync(path.join(whatsapp, "openclaw.plugin.json"), JSON.stringify({ id: "whatsapp" }));
+  writeFileSync(path.join(whatsapp, "index.js"), 'export default { id: "whatsapp" };');
   writeFileSync(
     path.join(plugin, "package.json"),
     JSON.stringify({
@@ -74,9 +86,10 @@ const workflow = readFileSync(
 );
 
 test("fork release builds and canonically packages Codex and Slack instead of retaining the registry generation", () => {
-  assert.match(workflow, /OPENCLAW_INTERNAL_DOCKER_BUILD_PLUGIN_IDS: "codex,slack"/);
+  assert.match(workflow, /OPENCLAW_INTERNAL_DOCKER_BUILD_PLUGIN_IDS: "codex,slack,whatsapp"/);
   assert.match(workflow, /--bundle-plugin codex/);
   assert.match(workflow, /--bundle-plugin slack/);
+  assert.match(workflow, /--bundle-plugin whatsapp/);
   assert.match(workflow, /fork-slack-cohort\.mjs stage/);
   assert.match(workflow, /fork-slack-cohort\.mjs[" ]+smoke/);
 });
@@ -87,7 +100,7 @@ test("stage records the immutable matching source cohort using the canonical sta
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(
     JSON.parse(readFileSync(path.join(root, "dist/build-info.json"))).stagedOfficialPlugins,
-    { commit: sha, pluginIds: ["codex", "slack"] },
+    { commit: sha, pluginIds: ["codex", "slack", "whatsapp"] },
   );
 });
 
@@ -113,6 +126,14 @@ test("smoke imports the installed cohort graphs without starting it and records 
         package_name: "@openclaw/slack",
         origin: "bundled",
         relative_path: "dist/extensions/slack",
+        sdk_paths_checked: 0,
+        runtime_import: "passed",
+      },
+      {
+        plugin_id: "whatsapp",
+        package_name: "@openclaw/whatsapp",
+        origin: "bundled",
+        relative_path: "dist/extensions/whatsapp",
         sdk_paths_checked: 0,
         runtime_import: "passed",
       },
@@ -152,7 +173,12 @@ for (const variant of [
         JSON.stringify({
           commit: sha,
           ...(variant === "wrong-stage"
-            ? { stagedOfficialPlugins: { commit: "b".repeat(40), pluginIds: ["codex", "slack"] } }
+            ? {
+                stagedOfficialPlugins: {
+                  commit: "b".repeat(40),
+                  pluginIds: ["codex", "slack", "whatsapp"],
+                },
+              }
             : {}),
         }),
       );

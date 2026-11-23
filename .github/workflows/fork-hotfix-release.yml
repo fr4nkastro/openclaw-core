@@ -32,7 +32,7 @@ jobs:
       OPENCLAW_RUN_NODE_SKIP_DTS_BUILD: "0"
       OPENCLAW_BUILD_CACHE: "0"
       # Compile external Codex and Slack in the same unified host build, not from npm.
-      OPENCLAW_INTERNAL_DOCKER_BUILD_PLUGIN_IDS: "codex,slack"
+      OPENCLAW_INTERNAL_DOCKER_BUILD_PLUGIN_IDS: "codex,slack,whatsapp"
       CI: "true"
     steps:
       - name: Checkout selected fork source
@@ -129,6 +129,7 @@ jobs:
             --skip-build --pnpm-pack --allow-unreleased-changelog \
             --bundle-plugin codex \
             --bundle-plugin slack \
+            --bundle-plugin whatsapp \
             --output-dir "$RUNNER_TEMP/fork-pack" \
             2>&1 | tee "$RUNNER_TEMP/fork-release/pack.log"
 
@@ -151,8 +152,8 @@ jobs:
               assert manifest['version'] == proof['package_version']
               build = json.load(tar.extractfile('package/dist/build-info.json'))
               assert build['commit'] == proof['source_sha']
-              assert build['stagedOfficialPlugins'] == dict(commit=proof['source_sha'], pluginIds=['codex', 'slack'])
-              for plugin_id in ['codex', 'slack']:
+              assert build['stagedOfficialPlugins'] == dict(commit=proof['source_sha'], pluginIds=['codex', 'slack', 'whatsapp'])
+              for plugin_id in ['codex', 'slack', 'whatsapp']:
                   plugin = json.load(tar.extractfile(f'package/dist/extensions/{plugin_id}/package.json'))
                   assert plugin['name'] == f'@openclaw/{plugin_id}'
                   assert plugin['openclaw']['build']['bundledDist'] is True
@@ -207,8 +208,8 @@ jobs:
           proof['slack_cohort'] = json.loads((root / 'slack-cohort.json').read_text())
           assert proof['slack_cohort']['source_sha'] == proof['source_sha']
           plugins = json.loads((root / 'plugins-list.json').read_text())['plugins']
-          assert [p['plugin_id'] for p in proof['slack_cohort']['plugins']] == ['codex', 'slack']
-          for plugin_id in ['codex', 'slack']:
+          assert [p['plugin_id'] for p in proof['slack_cohort']['plugins']] == ['codex', 'slack', 'whatsapp']
+          for plugin_id in ['codex', 'slack', 'whatsapp']:
               selected = [p for p in plugins if p['id'] == plugin_id]
               assert len(selected) == 1, f'{plugin_id} must be discovered exactly once'
               assert selected[0]['origin'] == 'bundled', f'{plugin_id} resolved to an external generation'
