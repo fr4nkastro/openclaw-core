@@ -73,7 +73,7 @@ export function assertSqliteWorkerRequestAuthority(owner: SqliteWorkerOperationC
 
 /** Ask the live host owner for a native stage; preparation precedes writer-lock acquisition. */
 export function requestSqliteWorkerOperationAdmission(
-  request: SqliteWorkerAdmissionRequest,
+  requested: SqliteWorkerAdmissionRequest,
   transferList: Transferable[] = [],
 ): void {
   const scope = currentAdmission.getStore();
@@ -85,13 +85,16 @@ export function requestSqliteWorkerOperationAdmission(
   }
   assertSqliteWorkerRequestCustody(scope.owner);
   const timeoutMs = admissionTimeout.getStore();
-  if (timeoutMs !== undefined) {
-    request = {
-      ...request,
-      deadlineMs:
-        request.deadlineMs === undefined ? timeoutMs : Math.min(request.deadlineMs, timeoutMs),
-    };
-  }
+  const request: SqliteWorkerAdmissionRequest =
+    timeoutMs === undefined
+      ? requested
+      : {
+          ...requested,
+          deadlineMs:
+            requested.deadlineMs === undefined
+              ? timeoutMs
+              : Math.min(requested.deadlineMs, timeoutMs),
+        };
   const decision = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
   const startedAt = Date.now();
   const deadlineNs =
