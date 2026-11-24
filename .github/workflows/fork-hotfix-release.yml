@@ -110,7 +110,18 @@ jobs:
             src/plugins/plugin-native-namespace.test.ts \
             src/infra/update-recovery-baseline-capture.timing.test.ts \
             src/commands/doctor-original-capture.test.ts \
+            src/plugin-sdk/facade-activation-check.cache.test.ts \
+            src/plugin-sdk/facade-runtime.activation.test.ts \
+            src/plugin-sdk/facade-runtime.test.ts \
             2>&1 | tee "$RUNNER_TEMP/fork-release/wal-regression.log"
+
+      - name: Lint and format fork-owned changes
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          files="src/plugin-sdk/facade-activation-check.runtime.ts src/plugin-sdk/facade-activation-check.cache.test.ts"
+          pnpm exec oxlint $files
+          node scripts/run-format.mts --check $files
 
       - name: Build full package
         run: |
