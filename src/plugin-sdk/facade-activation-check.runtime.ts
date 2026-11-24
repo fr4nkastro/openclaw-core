@@ -7,7 +7,9 @@ import { resolveConfigPath } from "../config/paths.js";
 import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
 import { configMayNeedPluginAutoEnable } from "../config/plugin-auto-enable.shared.js";
 import {
+  getRuntimeConfigAppliedHash,
   getRuntimeConfigSnapshot,
+  getRuntimeConfigSnapshotMetadata,
   getRuntimeConfigSourceSnapshot,
 } from "../config/runtime-snapshot.js";
 import type { OpenClawConfig } from "../config/types.js";
@@ -60,8 +62,62 @@ function readFacadeBoundaryConfigSafely(): OpenClawConfig {
   }
 }
 
-function getFacadeBoundaryResolvedConfig() {
+type FacadeBoundaryResolvedConfig = ReturnType<typeof resolveFacadeBoundaryConfig>;
+
+/**
+ * Session projection resolves bundled conversation facades once per session row.
+ * Plugin auto-enable re-derives model routes for every configured agent, so an
+ * uncached resolution costs a full config projection per row and blocked Gateway
+ * startup for minutes on large installs. Results depend only on the published
+ * config revision and the process environment, so reuse them for the same object,
+ * revision and environment.
+ */
+const facadeBoundaryConfigCache = new WeakMap<
+  OpenClawConfig,
+  { key: string; value: FacadeBoundaryResolvedConfig }
+>();
+let facadeBoundaryResolutionCount = 0;
+
+function resolveFacadeBoundaryEnvFingerprint(env: NodeJS.ProcessEnv): string {
+  let fingerprint = "";
+  for (const key of Object.keys(env).toSorted()) {
+    fingerprint += `${key}\u0000${env[key] ?? ""}\u0001`;
+  }
+  return fingerprint;
+}
+
+function resolveFacadeBoundaryCacheKey(): string {
+  const metadata = getRuntimeConfigSnapshotMetadata();
+  return [
+    metadata ? `${metadata.revision}:${metadata.fingerprint}` : "",
+    getRuntimeConfigAppliedHash() ?? "",
+    resolveFacadeBoundaryEnvFingerprint(process.env),
+  ].join("\u0002");
+}
+
+function getFacadeBoundaryResolvedConfig(): FacadeBoundaryResolvedConfig {
   const rawConfig = readFacadeBoundaryConfigSafely();
+  // The fallback empty config is shared; file-read fallbacks are fresh objects.
+  if (rawConfig === EMPTY_FACADE_BOUNDARY_CONFIG) {
+    return resolveFacadeBoundaryConfig(rawConfig);
+  }
+  const key = resolveFacadeBoundaryCacheKey();
+  const cached = facadeBoundaryConfigCache.get(rawConfig);
+  if (cached?.key === key) {
+    return cached.value;
+  }
+  const value = resolveFacadeBoundaryConfig(rawConfig);
+  facadeBoundaryConfigCache.set(rawConfig, { key, value });
+  return value;
+}
+
+/** Test seam: number of uncached facade boundary config resolutions. */
+export function getFacadeBoundaryResolutionCountForTest(): number {
+  return facadeBoundaryResolutionCount;
+}
+
+function resolveFacadeBoundaryConfig(rawConfig: OpenClawConfig) {
+  facadeBoundaryResolutionCount += 1;
   const autoEnabled = configMayNeedPluginAutoEnable(rawConfig, process.env)
     ? applyPluginAutoEnable({
         config: rawConfig,
