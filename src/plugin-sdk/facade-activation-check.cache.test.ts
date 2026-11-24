@@ -70,8 +70,8 @@ describe("facade boundary config cache", () => {
     setRuntimeConfigSnapshot(config);
     resolveBundledPluginPublicSurfaceAccess(params);
     const cached = resolveBundledPluginPublicSurfaceAccess(params);
-    // An equal but distinct snapshot object cannot reuse the cached entry.
-    setRuntimeConfigSnapshot(structuredClone(config));
+    // Publishing equal values keeps the snapshot; an unrelated change forces a fresh resolution.
+    setRuntimeConfigSnapshot({ ...structuredClone(config), messages: { ackReaction: "eyes" } });
     const before = getFacadeBoundaryResolutionCountForTest();
     const fresh = resolveBundledPluginPublicSurfaceAccess(params);
     expect(getFacadeBoundaryResolutionCountForTest() - before).toBe(1);
