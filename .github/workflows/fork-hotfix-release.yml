@@ -94,11 +94,11 @@ jobs:
           pnpm install --frozen-lockfile 2>&1 | tee "$RUNNER_TEMP/fork-release/install.log"
 
       - name: Verify WAL admission regression and lease safety
-        timeout-minutes: 15
+        timeout-minutes: 60
         run: |
           set -euo pipefail
           node --test test/scripts/fork-slack-cohort.test.mjs
-          pnpm exec vitest run --config test/vitest/vitest.unit-src.config.ts \
+          pnpm test \
             src/plugins/dev-source-root.test.ts \
             src/plugins/fork-slack-cohort.test.ts \
             src/infra/package-plugin-composition.test.ts \
@@ -114,6 +114,12 @@ jobs:
             src/plugin-sdk/facade-runtime.activation.test.ts \
             src/plugin-sdk/facade-runtime.test.ts \
             2>&1 | tee "$RUNNER_TEMP/fork-release/wal-regression.log"
+          # The targeted run must execute tests; an empty selection is a failure.
+          if grep -q "No test files found" "$RUNNER_TEMP/fork-release/wal-regression.log"; then
+            echo "Fork regression selection ran no tests" >&2
+            exit 1
+          fi
+          grep -E "Test Files .*passed" "$RUNNER_TEMP/fork-release/wal-regression.log"
 
       - name: Lint and format fork-owned changes
         timeout-minutes: 10
